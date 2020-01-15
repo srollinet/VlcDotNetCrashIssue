@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
-using System.Windows.Controls;
 using LibVLCSharp.Shared;
+using LibVLCSharp.WPF;
 using MediaPlayer = LibVLCSharp.Shared.MediaPlayer;
 
 namespace VlcCrashRepro
@@ -9,7 +9,7 @@ namespace VlcCrashRepro
     public partial class VideoPlayer
     {
         private readonly LibVLC _libVLC;
-        private MediaPlayer _mediaPlayer;
+        private VideoView _videoView;
 
         public VideoPlayer()
         {
@@ -25,21 +25,40 @@ namespace VlcCrashRepro
                 return;
             }
 
-            var media = new Media(_libVLC, mediaUri.AbsoluteUri, FromType.FromLocation);
-            media.AddOption("no-audio");
-            _mediaPlayer = new MediaPlayer(_libVLC);
-            VideoView.MediaPlayer = _mediaPlayer;
-            _mediaPlayer.Play(media);
+            var videoView = new VideoView
+            {
+                MediaPlayer = new MediaPlayer(_libVLC)
+            };
+            videoView.Loaded += (sender, args) =>
+            {
+                using (var media = new Media(_libVLC, mediaUri.AbsoluteUri, FromType.FromLocation))
+                {
+                    media.AddOption("no-audio");
+                    videoView.MediaPlayer.Play(media);
+                }
+            };
+            _videoView = videoView;
+            Content = videoView;
         }
 
         public void Stop()
         {
-            VideoView.MediaPlayer = null;
-            var toDispose = _mediaPlayer;
-            _mediaPlayer = null;
+            if (_videoView == null)
+            {
+                return;
+            }
+
+            var oldPlayer = _videoView.MediaPlayer;
+            var oldVideoView = _videoView;
+            _videoView = null;
+            Content = null;
+
+            //Must be done on UI thread
+            oldVideoView.Dispose();
+
             Task.Run(() =>
             {
-                toDispose?.Dispose();
+                oldPlayer.Dispose();
             });
         }
     }
