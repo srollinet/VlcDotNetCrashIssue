@@ -1,115 +1,46 @@
 ﻿using System;
-using System.ComponentModel;
-using System.IO;
-using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Controls;
-using System.Windows.Threading;
-using Vlc.DotNet.Core;
-using Vlc.DotNet.Forms;
+using LibVLCSharp.Shared;
+using MediaPlayer = LibVLCSharp.Shared.MediaPlayer;
 
 namespace VlcCrashRepro
 {
-    /// <summary>
-    /// Interaction logic for VideoPlayer.xaml
-    /// </summary>
-    public partial class VideoPlayer : UserControl
+    public partial class VideoPlayer
     {
-        private static readonly TimeSpan StreamWatchDogInterval = TimeSpan.FromSeconds(10);
+        private readonly LibVLC _libVLC;
+        private MediaPlayer _mediaPlayer;
 
-        // ReSharper disable once AssignNullToNotNullAttribute
-        // ReSharper disable once PossibleNullReferenceException
-        private static readonly DirectoryInfo LibDirectory = new DirectoryInfo(Path.Combine(
-            new FileInfo(Assembly.GetEntryAssembly().Location).DirectoryName,
-            "libvlc",
-            IntPtr.Size == 4 ? "win-x86" : "win-x64"));
-
-        private VideoPlayerViewModel ViewModel { get; }
-
-        private readonly DispatcherTimer _streamWatchdogTimer = new DispatcherTimer();
-        private readonly VlcControl _vlcControl;
-
-        private readonly object _vlcControlLock = new object();
-
-        public VideoPlayer(VideoPlayerViewModel viewModel)
+        public VideoPlayer()
         {
-            ViewModel = viewModel;
-            DataContext = viewModel;
-
             InitializeComponent();
-
-            _streamWatchdogTimer.Interval = StreamWatchDogInterval;
-            _streamWatchdogTimer.Tick += (sender, args) =>
-            {
-                var mediaUri = ViewModel.MediaUri;
-                if (mediaUri == null || _vlcControl.VlcMediaPlayer.IsPlaying())
-                {
-                    ViewModel.HasError = false;
-                    return;
-                }
-
-                ViewModel.HasError = true;
-                Console.WriteLine($"mediaPlayer {ViewModel.Index} is not playing stream {mediaUri}, attempting to restart it.");
-                Play(mediaUri);
-            };
-            ViewModel.PropertyChanged += ViewModelOnPropertyChanged;
-
-            _vlcControl = new VlcControl();
-            PlayerContainer.Child = _vlcControl;
-            _vlcControl.BeginInit();
-            _vlcControl.VlcLibDirectory = LibDirectory;
-            _vlcControl.EndInit();
-
-            _vlcControl.VlcMediaPlayer.Log += MediaPlayerOnLog;
+            _libVLC = new LibVLC();
         }
 
-        private void ViewModelOnPropertyChanged(object sender, PropertyChangedEventArgs e)
+        public void Play(Uri mediaUri)
         {
-            switch (e.PropertyName)
+            Stop();
+            if (mediaUri == null)
             {
-                case nameof(VideoPlayerViewModel.MediaUri):
-                    Play(ViewModel.MediaUri);
-                    break;
+                return;
             }
+
+            var media = new Media(_libVLC, mediaUri.AbsoluteUri, FromType.FromLocation);
+            media.AddOption("no-audio");
+            _mediaPlayer = new MediaPlayer(_libVLC);
+            VideoView.MediaPlayer = _mediaPlayer;
+            _mediaPlayer.Play(media);
         }
 
-        private void Play(Uri mediaUri)
+        public void Stop()
         {
-            //If invoked from the main thread it deadlocks sometimes.
+            VideoView.MediaPlayer = null;
+            var toDispose = _mediaPlayer;
+            _mediaPlayer = null;
             Task.Run(() =>
             {
-                lock (_vlcControlLock)
-                {
-                    _streamWatchdogTimer.Stop();
-                    _vlcControl.Stop();
-                    if (mediaUri == null)
-                    {
-                        return;
-                    }
-
-                    _vlcControl.Play(mediaUri, "no-audio");
-                    _streamWatchdogTimer.Start();
-                }
+                toDispose?.Dispose();
             });
-        }
-
-        private void Stop()
-        {
-            //If invoked from the main thread it deadlocks sometimes.
-            Task.Run(() =>
-            {
-                lock (_vlcControlLock)
-                {
-                    _streamWatchdogTimer.Stop();
-                    _vlcControl.Stop();
-                }
-            });
-        }
-
-        private void MediaPlayerOnLog(object sender, VlcMediaPlayerLogEventArgs e)
-        {
-            Console.WriteLine($"mediaPlayer {ViewModel.Index} {e.Module}: {e.Message}");
         }
     }
 }

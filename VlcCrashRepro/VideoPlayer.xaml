@@ -3,19 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vlcCrashRepro="clr-namespace:VlcCrashRepro"
-             mc:Ignorable="d"
-             d:DataContext="{d:DesignInstance vlcCrashRepro:VideoPlayerViewModel}">
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition/>
-            <RowDefinition Height="20"/>
-            <RowDefinition Height="20"/>
-        </Grid.RowDefinitions>
-        <WindowsFormsHost x:Name="PlayerContainer" />
-        <TextBlock Background="Black" Foreground="White"
-                   Grid.Row="1" Text="{Binding MediaUri, StringFormat='{}URI: {0}'}"></TextBlock>
-        <TextBlock Background="Black" Foreground="White"
-                   Grid.Row="2" Text="{Binding HasError, StringFormat='{}Error: {0}'}"></TextBlock>
-    </Grid>
+             xmlns:wpf="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
+             mc:Ignorable="d">
+    <wpf:VideoView x:Name="VideoView" Background="Black"/>
 </UserControl>

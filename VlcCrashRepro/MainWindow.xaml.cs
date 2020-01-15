@@ -7,47 +7,36 @@ using System.Windows.Controls;
 
 namespace VlcCrashRepro
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
     public partial class MainWindow : Window
     {
-        private const int NbRows = 3;
-        private const int NbColumns = 3;
-        private const int NbCallers = 10;
+        private const int NbRows = 4;
+        private const int NbColumns = 4;
 
         private static readonly Random Rnd = new Random(42);
+        private static readonly TimeSpan DelayBetweenAffectations = TimeSpan.FromSeconds(4);
 
         private static readonly IReadOnlyList<Uri> StreamUris = new[]
             {
-                "rtsp://192.168.5.87/VideoInput/1/H264/1",
-                "rtsp://192.168.5.87/VideoInput/2/H264/1",
-                "rtsp://192.168.3.12/axis-media/media.amp",
-                "rtsp://192.168.3.13/axis-media/media.amp",
-                "rtsp://192.168.3.17/axis-media/media.amp",
-                "rtsp://192.168.3.31/axis-media/media.amp",
-                "rtsp://192.168.3.37/axis-media/media.amp",
-                "rtsp://192.168.3.38/axis-media/media.amp",
-                "rtsp://192.168.3.44/axis-media/media.amp",
-                "rtsp://192.168.3.47/axis-media/media.amp",
-                "rtsp://192.168.3.50/axis-media/media.amp",
-                "rtsp://192.168.3.51/axis-media/media.amp",
-                "rtsp://192.168.3.53/axis-media/media.amp",
-                "rtsp://192.168.3.55/axis-media/media.amp",
-                "rtsp://192.168.3.59/axis-media/media.amp",
-                "rtsp://192.168.3.61/axis-media/media.amp",
-                "rtsp://192.168.3.62/axis-media/media.amp",
-                "rtsp://192.168.3.73/axis-media/media.amp",
-                "rtsp://192.168.3.76/axis-media/media.amp",
-                "rtsp://192.168.3.80/axis-media/media.amp",
-                "rtsp://192.168.3.81/axis-media/media.amp",
-                "rtsp://192.168.3.82/axis-media/media.amp",
+                "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+                "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+                "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+                "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+                "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
+                "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
+                "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+                "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4",
+                "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+                "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/VolkswagenGTIReview.mp4",
+                "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
+                "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCarCanYouGetForAGrand.mp4" ,
             }.Select(val => new Uri(val))
             .ToArray();
 
         public MainWindow()
         {
             InitializeComponent();
+            LibVLCSharp.Shared.Core.Initialize();
 
             for (var col = 0; col < NbColumns; col++)
             {
@@ -59,37 +48,38 @@ namespace VlcCrashRepro
                 PlayerGrid.RowDefinitions.Add(new RowDefinition());
             }
 
-            var viewModels = new List<VideoPlayerViewModel>();
-            var playerIndex = 1;
+            var players = new List<VideoPlayer>(NbRows * NbColumns);
             for (var row = 0; row < NbRows; row++)
             {
                 for (var col = 0; col < NbColumns; col++)
                 {
-                    var viewModel = new VideoPlayerViewModel(playerIndex++);
-                    viewModels.Add(viewModel);
-
-                    var player = new VideoPlayer(viewModel);
+                    var player = new VideoPlayer();
+                    players.Add(player);
                     PlayerGrid.Children.Add(player);
                     Grid.SetColumn(player, col);
                     Grid.SetRow(player, row);
                 }
             }
 
-            async Task AffectRandomStreams()
+            Task ChangeMatrixAffectations()
+            {
+                var tasks = players.Select(p =>
+                {
+                    var uri = StreamUris[Rnd.Next(StreamUris.Count)];
+                    return Dispatcher.InvokeAsync(() => { p.Play(uri); }).Task;
+                });
+
+                return Task.WhenAll(tasks);
+            }
+
+            Task.Run(async () =>
             {
                 while (true)
                 {
-                    var viewModel = viewModels[Rnd.Next(viewModels.Count)];
-                    var uri = StreamUris[Rnd.Next(StreamUris.Count)];
-                    await Dispatcher.InvokeAsync(() => viewModel.AffectMedia(uri));
-                    await Task.Delay(Rnd.Next(10000));
+                    await ChangeMatrixAffectations();
+                    await Task.Delay(DelayBetweenAffectations);
                 }
-            }
-
-            for (var i = 0; i < NbCallers; i++)
-            {
-                Task.Run(AffectRandomStreams);
-            }
+            });
         }
     }
 }
